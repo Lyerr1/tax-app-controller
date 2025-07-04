@@ -1,28 +1,27 @@
-// 这是您的有效密钥列表。
-// 要给新客户授权，就把他的密钥加到这里。
-// 要吊销某个客户的权限，就从这里删除他的密钥。
+// 您的密钥“数据库”。当您要给新客户时，在这里添加一个新密钥。
+// 这里的密钥本身不包含时间信息。
 const VALID_KEYS = [
-    'CLIENT_A_UNIQUE_ACCESS_KEY', // 这是一个示例密钥，请确保它和您HTML文件里的一致
-    'ANOTHER_CLIENT_KEY_12348',
-    // 根据需要在这里添加更多密钥
+  'CLIENT_A_UNIQUE_ACCESS_KEY', // 客户A的密钥
+  'f47ac10b-58cc-4372-a567-0e02b2c3d479', // 客户B的密钥
+  'another-new-key-for-client-c' // 客户C的密钥
 ];
 
+// 24小时的毫秒数
+const TWENTY_FOUR_HOURS_IN_MS = 24 * 60 * 60 * 1000;
+
+// 获取本次部署的时间戳。Netlify在构建时会自动设置这个环境变量。
+// 如果在本地测试，就使用当前时间。
+const DEPLOY_TIME = process.env.CONTEXT === 'production' 
+  ? Date.parse(process.env.BUILD_ID) 
+  : Date.now();
+
 exports.handler = async function(event, context) {
-    // --- 新增：处理浏览器的预检请求 (OPTIONS request) ---
-    // 这是 CORS 规范的一部分，对于复杂的请求是必需的
+    // 处理CORS预检请求
     if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 204, // No Content
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            body: ''
-        };
+        return { statusCode: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }, body: '' };
     }
     
-    // 只允许 POST 请求
+    // 只允许POST请求
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -31,31 +30,33 @@ exports.handler = async function(event, context) {
         const body = JSON.parse(event.body);
         const receivedKey = body.key;
 
-        if (VALID_KEYS.includes(receivedKey)) {
-            // Key is valid, grant access.
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*' // <-- 关键修改：允许所有来源访问
-                },
-                body: JSON.stringify({ status: 'ok', message: 'Access Granted' })
-            };
-        } else {
-            // Key is NOT valid, deny access.
+        // 1. 检查密钥是否存在于我们的列表中
+        if (!VALID_KEYS.includes(receivedKey)) {
             return {
                 statusCode: 200, 
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*' // <-- 关键修改：允许所有来源访问
-                },
-                body: JSON.stringify({ status: 'denied', message: '无效或已过期。' })
+                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+                body: JSON.stringify({ status: 'denied', message: '无效的密钥。' })
             };
         }
-    } catch (error) {
+
+        // 2. 检查是否已过期
+        const now = Date.now();
+        if (now - DEPLOY_TIME > TWENTY_FOUR_HOURS_IN_MS) {
+            return {
+                statusCode: 200, 
+                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+                body: JSON.stringify({ status: 'denied', message: '访问已过期。' })
+            };
+        }
+
+        // 3. 如果密钥有效且未过期，则授予访问权限
         return {
-            statusCode: 400,
-            body: JSON.stringify({ status: 'error', message: 'Bad request.' })
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ status: 'ok', message: 'Access Granted' })
         };
+
+    } catch (error) {
+        return { statusCode: 400, body: JSON.stringify({ status: 'error', message: 'Bad request.' }) };
     }
 };
