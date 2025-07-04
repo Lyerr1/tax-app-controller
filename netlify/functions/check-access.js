@@ -3,7 +3,7 @@
 // 要吊销某个客户的权限，就从这里删除他的密钥。
 const VALID_KEYS = [
     'CLIENT_A_UNIQUE_ACCESS_KEY', // 这是一个示例密钥，请确保它和您HTML文件里的一致
-    'ANOTHER_CLIENT_KEY_12345',
+    'ANOTHER_CLIENT_KEY_12348',
     // 根据需要在这里添加更多密钥
 ];
 
